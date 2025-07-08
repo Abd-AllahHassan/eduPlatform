@@ -12,7 +12,7 @@ export default function Lessons() {
   })
 
   const { data: lessons, isLoading, error } = useLessons(filters)
-  const { addToCart, cartItems, isLessonPurchased, isLessonApproved, isLessonPending, isLessonRejected } = useCart()
+  const { addToCart, cartItems } = useCart()
 
   const handleFilterChange = (key, value) => {
     console.log(`Filter changed: ${key} = ${value}`)
@@ -35,30 +35,6 @@ export default function Lessons() {
   const isLessonPaid = (lesson) => {
     // Check multiple possible indicators
     return lesson.isPaid === true || (lesson.price && lesson.price > 0)
-  }
-
-  // Helper function to handle lesson access
-  const handleLessonAccess = (lesson) => {
-    const isPaid = isLessonPaid(lesson)
-
-    if (!isPaid) {
-      // Free lesson - direct access
-      window.open(`/student/lesson-player/${lesson._id}`, "_blank")
-      return
-    }
-
-    // Paid lesson - check payment status
-    if (isLessonApproved(lesson._id)) {
-      // Approved - can watch
-      window.open(`/student/lesson-player/${lesson._id}`, "_blank")
-    } else if (isLessonPending(lesson._id)) {
-      alert("Your payment is pending admin approval. Please wait for approval to access this lesson.")
-    } else if (isLessonRejected(lesson._id)) {
-      alert("Your payment was rejected. Please contact support or try purchasing again.")
-    } else {
-      // Not purchased - add to cart
-      addToCart(lesson)
-    }
   }
 
   if (isLoading) {
@@ -202,10 +178,7 @@ export default function Lessons() {
                   <span className="text-white text-4xl">🎥</span>
                 </div>
                 <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleLessonAccess(lesson)}
-                    className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center hover:bg-opacity-100 transition-all"
-                  >
+                  <button className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
                     <span className="text-2xl ml-1">▶️</span>
                   </button>
                 </div>
@@ -248,60 +221,19 @@ export default function Lessons() {
                   </div>
 
                   {isPaid ? (
-                    <>
-                      {isInCart(lesson._id) ? (
-                        <button
-                          disabled
-                          className="px-6 py-2 bg-gray-100 text-gray-500 rounded-xl text-sm font-medium cursor-not-allowed"
-                        >
-                          In Cart
-                        </button>
-                      ) : isLessonPurchased(lesson._id) ? (
-                        <>
-                          {isLessonApproved(lesson._id) ? (
-                            <button
-                              onClick={() => handleLessonAccess(lesson)}
-                              className="px-6 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 hover:shadow-lg transform hover:scale-105 transition-all"
-                            >
-                              ▶️ Watch Now
-                            </button>
-                          ) : isLessonPending(lesson._id) ? (
-                            <button
-                              disabled
-                              className="px-6 py-2 bg-yellow-100 text-yellow-800 rounded-xl text-sm font-medium cursor-not-allowed"
-                            >
-                              ⏳ Pending Approval
-                            </button>
-                          ) : isLessonRejected(lesson._id) ? (
-                            <button
-                              disabled
-                              className="px-6 py-2 bg-red-100 text-red-800 rounded-xl text-sm font-medium cursor-not-allowed"
-                            >
-                              ❌ Payment Rejected
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => addToCart(lesson)}
-                              className="px-6 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 hover:shadow-lg transform hover:scale-105 transition-all"
-                            >
-                              Add to Cart
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => addToCart(lesson)}
-                          className="px-6 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 hover:shadow-lg transform hover:scale-105 transition-all"
-                        >
-                          Add to Cart
-                        </button>
-                      )}
-                    </>
-                  ) : (
                     <button
-                      onClick={() => handleLessonAccess(lesson)}
-                      className="px-6 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 hover:shadow-lg transform hover:scale-105 transition-all"
+                      onClick={() => addToCart(lesson)}
+                      disabled={isInCart(lesson._id)}
+                      className={`px-6 py-2 rounded-xl text-sm font-medium transition-all ${
+                        isInCart(lesson._id)
+                          ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                          : "bg-purple-600 text-white hover:bg-purple-700 hover:shadow-lg transform hover:scale-105"
+                      }`}
                     >
+                      {isInCart(lesson._id) ? "In Cart" : "Add to Cart"}
+                    </button>
+                  ) : (
+                    <button className="px-6 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 hover:shadow-lg transform hover:scale-105 transition-all">
                       Access Free
                     </button>
                   )}

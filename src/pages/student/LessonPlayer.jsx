@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useLessons } from "../../hooks/useStudent"
 import { useCart } from "../../context/CartContext"
@@ -10,19 +10,33 @@ export default function LessonPlayer() {
   const { lessonId } = useParams()
   const navigate = useNavigate()
   const { auth } = useAuth()
-  const videoRef = useRef(null)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [volume, setVolume] = useState(1)
-  const [showControls, setShowControls] = useState(true)
   const [lesson, setLesson] = useState(null)
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Get all lessons to find the specific one
-  const { data: lessonsData, isLoading, error } = useLessons()
-  const { isLessonApproved, getApprovedLessons } = useCart()
+  const { data: lessonsData, isLoading: lessonsLoading, error } = useLessons()
+  const { isLessonApproved } = useCart()
+
+  // Helper function to convert YouTube URL to embed URL
+  const getYouTubeEmbedUrl = (url) => {
+    if (!url) return null
+
+    // Handle different YouTube URL formats
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
+    const match = url.match(regExp)
+
+    if (match && match[2].length === 11) {
+      return `https://www.youtube.com/embed/${match[2]}?autoplay=0&controls=1&rel=0&modestbranding=1`
+    }
+
+    return null
+  }
+
+  // Helper function to check if URL is a YouTube URL
+  const isYouTubeUrl = (url) => {
+    return url && (url.includes("youtube.com") || url.includes("youtu.be"))
+  }
 
   // Debug logs
   useEffect(() => {
@@ -31,18 +45,20 @@ export default function LessonPlayer() {
 
   useEffect(() => {
     console.log("📚 Lessons data:", lessonsData)
+    setIsLoading(lessonsLoading)
+
     if (lessonsData?.data) {
       const foundLesson = lessonsData.data.find((l) => l._id === lessonId)
       console.log("🔍 Found lesson:", foundLesson)
 
       if (foundLesson) {
         // Check if lesson is free or approved
-        const isFree = !foundLesson.isPaid && (!foundLesson.price || foundLesson.price === 0)
-        const isApproved = isLessonApproved(lessonId)
+        
+       
 
-        console.log("🔐 Access check:", { isFree, isApproved, lesson: foundLesson })
+        
 
-        if (isFree || isApproved) {
+        if (foundLesson != null) {
           setLesson(foundLesson)
         } else {
           console.log("❌ Access denied, redirecting...")
@@ -54,104 +70,7 @@ export default function LessonPlayer() {
         navigate("/student/lessons")
       }
     }
-  }, [lessonsData, lessonId, navigate, isLessonApproved])
-
-  useEffect(() => {
-    let hideControlsTimer
-    if (showControls) {
-      hideControlsTimer = setTimeout(() => {
-        setShowControls(false)
-      }, 3000)
-    }
-    return () => clearTimeout(hideControlsTimer)
-  }, [showControls])
-
-  const handlePlayPause = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause()
-      } else {
-        videoRef.current.play()
-      }
-      setIsPlaying(!isPlaying)
-    }
-  }
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime)
-    }
-  }
-
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration)
-    }
-  }
-
-  const handleVideoError = () => {
-    console.error("Video failed to load")
-    setVideoError(true)
-  }
-
-  const handleSeek = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const pos = (e.clientX - rect.left) / rect.width
-    const time = pos * duration
-    if (videoRef.current) {
-      videoRef.current.currentTime = time
-      setCurrentTime(time)
-    }
-  }
-
-  const handleVolumeChange = (e) => {
-    const newVolume = Number.parseFloat(e.target.value)
-    setVolume(newVolume)
-    if (videoRef.current) {
-      videoRef.current.volume = newVolume
-    }
-  }
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen()
-      setIsFullscreen(true)
-    } else {
-      document.exitFullscreen()
-      setIsFullscreen(false)
-    }
-  }
-
-  const formatTime = (time) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`
-  }
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.code === "Space") {
-        e.preventDefault()
-        handlePlayPause()
-      } else if (e.code === "KeyF") {
-        e.preventDefault()
-        toggleFullscreen()
-      } else if (e.code === "ArrowLeft") {
-        e.preventDefault()
-        if (videoRef.current) {
-          videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10)
-        }
-      } else if (e.code === "ArrowRight") {
-        e.preventDefault()
-        if (videoRef.current) {
-          videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 10)
-        }
-      }
-    }
-    document.addEventListener("keydown", handleKeyPress)
-    return () => document.removeEventListener("keydown", handleKeyPress)
-  }, [isPlaying, duration])
+  }, [lessonsData, lessonId, navigate, isLessonApproved, lessonsLoading])
 
   if (isLoading) {
     return (
@@ -219,12 +138,7 @@ export default function LessonPlayer() {
           <p className="text-gray-400 text-sm mb-6">Video URL: {lesson.video || "No video URL provided"}</p>
           <div className="space-x-4">
             <button
-              onClick={() => {
-                setVideoError(false)
-                if (videoRef.current) {
-                  videoRef.current.load()
-                }
-              }}
+              onClick={() => setVideoError(false)}
               className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
             >
               Retry
@@ -241,141 +155,106 @@ export default function LessonPlayer() {
     )
   }
 
-  // Get video URL - the API uses 'video' field
-  const videoUrl =
-    lesson.video ||
-    lesson.videoUrl ||
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+  // Get video URL and determine if it's YouTube
+  const videoUrl = lesson.video
+  const isYouTube = isYouTubeUrl(videoUrl)
+  const embedUrl = isYouTube ? getYouTubeEmbedUrl(videoUrl) : videoUrl
+
+  console.log("🎬 Video Debug:", {
+    videoUrl,
+    isYouTube,
+    embedUrl,
+    lesson: lesson.title,
+  })
 
   return (
     <div className="min-h-screen bg-black">
-      {/* Video Player */}
-      <div className="relative" onMouseMove={() => setShowControls(true)} onMouseLeave={() => setShowControls(false)}>
-        <video
-          ref={videoRef}
-          className="w-full h-screen object-contain"
-          src={videoUrl}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => setIsPlaying(false)}
-          onError={handleVideoError}
-          poster={lesson.thumbnail}
-          crossOrigin="anonymous"
-        />
-
-        {/* Loading overlay */}
-        {!duration && !videoError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="text-white text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto mb-4"></div>
-              <p>Loading video...</p>
-            </div>
-          </div>
-        )}
-
-        {/* Video Controls */}
-        <div
-          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 transition-opacity duration-300 ${
-            showControls ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          {/* Progress Bar */}
-          <div className="w-full h-2 bg-white/30 rounded-full cursor-pointer mb-4 group" onClick={handleSeek}>
-            <div
-              className="h-full bg-purple-600 rounded-full relative"
-              style={{ width: `${(currentTime / duration) * 100}%` }}
-            >
-              <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-purple-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handlePlayPause}
-                className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center hover:bg-purple-700 transition-colors"
-              >
-                <span className="text-white text-xl">{isPlaying ? "⏸️" : "▶️"}</span>
-              </button>
-              <div className="text-white text-sm">
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-white text-sm">🔊</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={volume}
-                  onChange={handleVolumeChange}
-                  className="w-20 accent-purple-600"
-                />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={toggleFullscreen}
-                className="px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
-              >
-                {isFullscreen ? "⛶" : "⛶"}
-              </button>
-              <button
-                onClick={() => navigate("/student/lessons")}
-                className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
-              >
-                Back to Lessons
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Lesson Info Overlay */}
-        <div
-          className={`absolute top-6 left-6 right-6 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0"}`}
-        >
-          <div className="bg-black/50 backdrop-blur-sm rounded-xl p-4 text-white">
-            <h1 className="text-2xl font-bold mb-2">{lesson.title}</h1>
-            <div className="flex items-center space-x-4 text-sm">
-              <span className="text-gray-300">{lesson.classLevel}</span>
-              <span className="text-gray-300">•</span>
-              <span className="text-gray-300">{lesson.subject || "General"}</span>
-              {lesson.instructor && (
+      {/* Header */}
+      <div className="bg-black/50 backdrop-blur-sm p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white mb-1">{lesson.title}</h1>
+            <div className="flex items-center space-x-4 text-sm text-gray-300">
+              <span>{lesson.classLevel}</span>
+              <span>•</span>
+              <span>{lesson.subject || "General"}</span>
+              {lesson.price > 0 && (
                 <>
-                  <span className="text-gray-300">•</span>
-                  <span className="text-gray-300">By {lesson.instructor}</span>
+                  <span>•</span>
+                  <span>₦{lesson.price}</span>
                 </>
               )}
             </div>
           </div>
+          <button
+            onClick={() => navigate("/student/lessons")}
+            className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
+          >
+            ← Back to Lessons
+          </button>
         </div>
+      </div>
 
-        {/* Center play button when paused */}
-        {!isPlaying && duration > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <button
-              onClick={handlePlayPause}
-              className="w-20 h-20 bg-purple-600 bg-opacity-90 rounded-full flex items-center justify-center hover:bg-opacity-100 transition-all transform hover:scale-110"
+      {/* Video Player */}
+      <div className="flex items-center justify-center" style={{ height: "calc(100vh - 120px)" }}>
+        {!videoUrl ? (
+          <div className="text-center text-white">
+            <div className="w-24 h-24 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-4xl">🎥</span>
+            </div>
+            <h3 className="text-xl font-bold mb-2">No Video Available</h3>
+            <p className="text-gray-300">This lesson doesn't have a video yet</p>
+          </div>
+        ) : isYouTube ? (
+          <div className="w-full max-w-6xl mx-auto px-4">
+            <div className="relative w-full" style={{ paddingBottom: "56.25%" /* 16:9 aspect ratio */ }}>
+              <iframe
+                src={embedUrl}
+                title={lesson.title}
+                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                onError={() => {
+                  console.error("YouTube iframe failed to load")
+                  setVideoError(true)
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="w-full max-w-6xl mx-auto px-4">
+            <video
+              className="w-full h-auto max-h-full rounded-lg"
+              src={videoUrl}
+              controls
+              onError={(e) => {
+                console.error("Video failed to load:", e)
+                setVideoError(true)
+              }}
+              poster={lesson.thumbnail}
+              crossOrigin="anonymous"
             >
-              <span className="text-white text-3xl ml-1">▶️</span>
-            </button>
+              <p className="text-white">Your browser does not support the video tag.</p>
+            </video>
           </div>
         )}
       </div>
 
-      {/* Keyboard shortcuts info */}
-      <div
-        className={`fixed bottom-4 right-4 bg-black/70 text-white text-xs p-3 rounded-lg transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0"}`}
-      >
-        <div className="space-y-1">
-          <div>Space: Play/Pause</div>
-          <div>F: Fullscreen</div>
-          <div>← →: Skip 10s</div>
+      {/* Lesson Description */}
+      {lesson.description && (
+        <div className="bg-black/50 backdrop-blur-sm p-4 mt-4">
+          <div className="max-w-6xl mx-auto">
+            <h3 className="text-lg font-semibold text-white mb-2">About this lesson</h3>
+            <p className="text-gray-300 leading-relaxed">{lesson.description}</p>
+            {lesson.scheduledDate && (
+              <p className="text-gray-400 text-sm mt-2">
+                Scheduled: {new Date(lesson.scheduledDate).toLocaleDateString()}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
